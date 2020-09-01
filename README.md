@@ -54,6 +54,44 @@ This library contains [URL Builders](https://auth0.github.io/auth0.net/#using-ur
 
 **Important note on state validation**: If you choose to use the [AuthorizationUrlBuilder](https://auth0.github.io/auth0.net/api/Auth0.AuthenticationApi.Builders.AuthorizationUrlBuilder.html) to construct the authorization URL and implement a login flow callback yourself, it is important to generate and store a state value (using [WithState](https://auth0.github.io/auth0.net/api/Auth0.AuthenticationApi.Builders.AuthorizationUrlBuilder.html#Auth0_AuthenticationApi_Builders_AuthorizationUrlBuilder_WithState_System_String_)) and validate it in your callback URL before exchanging the authorization code for the tokens.
 
+### Bot Protection
+
+If you are using the [Bot Protection](https://auth0.com/docs/anomaly-detection/bot-protection) feature and performing database login/signup via the Authentication API on a public client (non-confidential), you need to handle the `verification_required` error. It indicates that the request was flagged as suspicious and an additional verification step is necessary to log the user in. That verification step is web-based, so you need to use Universal Login to complete it.
+
+```csharp
+var client = new AuthenticationApiClient("your.auth0.domain.com");
+
+try
+{
+    var response = await client.SignupUserAsync(new SignupUserRequest
+    {
+        Username = "ababab@test.com",
+        Email = "ababab@test.com"
+        Password = "secret password",
+        ClientId = "auth0-client-1",
+        Connection = "database-1",
+    });
+
+    // process the response
+}
+catch (ErrorApiException e)
+{
+    if (e.ApiError.Error == "requires_verification")
+    {
+        var authUrl = client.BuildAuthorizationUrl()
+            .WithRedirectUrl("myapp.com/callback")
+            .WithValue("login_hint", "ababab@test.com")     // So the user doesn't have to type it again
+            .WithValue("screen_hint", "signup")             // So it lands on the signup page
+            .Build();
+
+        // TODO: Open a browser with this URL
+        return Content(authUrl.ToString());
+    }
+
+    // Handle other errors
+}
+```
+
 ## Building
 
 This project can be built on Windows, Linux or macOS. Ensure you have the [.NET Core SDK](https://www.microsoft.com/net/download) installed. You can also use the code editor of your choice or a full-blown IDE such as Visual Studio or Jetbrains Rider.
