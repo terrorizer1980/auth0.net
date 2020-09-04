@@ -245,6 +245,50 @@ namespace Auth0.ManagementApi.IntegrationTests
         }
 
         [Fact]
+        public async Task Can_update_user_telephone()
+        {
+            var phoneNumber = "123456789012345";
+            var newNumber = "098765432112345";
+
+            // Add a new user with metadata
+            var newUserRequest = new UserCreateRequest
+            {
+                Connection = _connection.Name,
+                Email = $"{Guid.NewGuid():N}@nonexistingdomain.aaa",
+                EmailVerified = true,
+                Password = Password,
+                //PhoneNumber = phoneNumber,
+                UserMetadata = new
+                {
+                    phone_number = phoneNumber
+                }
+            };
+
+            var newUserResponse = await _apiClient.Users.CreateAsync(newUserRequest);
+
+            // Do some updating
+            var updateUserRequest = new UserUpdateRequest
+            {
+                //PhoneNumber = newNumber,
+                UserMetadata = new
+                {
+                    phone_number = newNumber
+                }
+            };
+
+            await _apiClient.Users.UpdateAsync(newUserResponse.UserId, updateUserRequest);
+
+            // Get the user to ensure the metadata was set
+            var user = await _apiClient.Users.GetAsync(newUserResponse.UserId);
+            string numberFromMetadata = user.UserMetadata.phone_number;
+            //Assert.Equal(newNumber, user.PhoneNumber);
+            Assert.Equal(numberFromMetadata, newNumber);
+
+            // Delete the user
+            await _apiClient.Users.DeleteAsync(user.UserId);
+        }
+
+        [Fact]
         public async Task Test_logs_deserialization_without_totals()
         {
             var newUserRequest = new UserCreateRequest
