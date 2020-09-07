@@ -17,25 +17,47 @@ namespace Auth0.ManagementApi.IntegrationTests
         private ManagementApiClient _apiClient;
         private Connection _connection;
         private const string Password = "4cX8awB3T%@Aw-R:=h@ae@k?";
+        private Connection _smsConnection;
 
         public async Task InitializeAsync()
         {
-            string token = await GenerateManagementApiToken();
+            string token = await GenerateBruckeManagementApiToken();
 
-            _apiClient = new ManagementApiClient(token, GetVariable("AUTH0_MANAGEMENT_API_URL"));
+            _apiClient = new ManagementApiClient(token, GetVariable("BRUCKE_MANAGEMENT_API_URL"));
 
             // We will need a connection to add the users to...
             _connection = await _apiClient.Connections.CreateAsync(new ConnectionCreateRequest
             {
                 Name = "Temp-Int-Test-" + MakeRandomName(),
                 Strategy = "auth0",
-                EnabledClients = new[] { GetVariable("AUTH0_CLIENT_ID"), GetVariable("AUTH0_MANAGEMENT_API_CLIENT_ID") }
+                EnabledClients = new[] { GetVariable("BRUCKE_CLIENT_ID"), GetVariable("BRUCKE_MANAGEMENT_API_CLIENT_ID") }
             });
+
+            //_smsConnection = await _apiClient.Connections.CreateAsync(new ConnectionCreateRequest
+            //{
+            //    Name = "SMSConnection-" + MakeRandomName(),
+            //    Strategy = "sms",
+            //    Options = new
+            //    {
+            //        twilio_sid = "90f8dofiudfl",
+            //        twilio_token = "890dufdiojf",
+            //        from = "+44123786" 
+            //    },
+            //    EnabledClients = new[] { GetVariable("BRUCKE_CLIENT_ID"), GetVariable("BRUCKE_MANAGEMENT_API_CLIENT_ID") }
+            //});
+
+            _smsConnection = (await _apiClient.Connections.GetAllAsync(new GetConnectionsRequest
+            {
+                Strategy = new string[] { "sms" }
+            }, new PaginationInfo())).First();
+
+
         }
 
         public async Task DisposeAsync()
         {
             await _apiClient.Connections.DeleteAsync(_connection.Id);
+            //await _apiClient.Connections.DeleteAsync(_smsConnection.Id);
         }
 
         [Fact]
@@ -247,45 +269,25 @@ namespace Auth0.ManagementApi.IntegrationTests
         [Fact]
         public async Task Can_update_user_telephone()
         {
-            var phoneNumber = "123456789012345";
-            var newNumber = "098765432112345";
-
-            // Add a new user with metadata
-            var newUserRequest = new UserCreateRequest
-            {
-                Connection = _connection.Name,
-                Email = $"{Guid.NewGuid():N}@nonexistingdomain.aaa",
-                EmailVerified = true,
-                Password = Password,
-                //PhoneNumber = phoneNumber,
-                UserMetadata = new
-                {
-                    phone_number = phoneNumber
-                }
-            };
-
-            var newUserResponse = await _apiClient.Users.CreateAsync(newUserRequest);
+            var newNumber = "+0987654321";
 
             // Do some updating
             var updateUserRequest = new UserUpdateRequest
             {
-                //PhoneNumber = newNumber,
+                PhoneNumber = newNumber,
                 UserMetadata = new
                 {
                     phone_number = newNumber
                 }
             };
 
-            await _apiClient.Users.UpdateAsync(newUserResponse.UserId, updateUserRequest);
+            var updatedUser = await _apiClient.Users.UpdateAsync("sms|59e76ace7cd3126297114883", updateUserRequest);
 
             // Get the user to ensure the metadata was set
-            var user = await _apiClient.Users.GetAsync(newUserResponse.UserId);
+            var user = await _apiClient.Users.GetAsync(updatedUser.UserId);
             string numberFromMetadata = user.UserMetadata.phone_number;
-            //Assert.Equal(newNumber, user.PhoneNumber);
+            Assert.Equal(newNumber, user.PhoneNumber);
             Assert.Equal(numberFromMetadata, newNumber);
-
-            // Delete the user
-            await _apiClient.Users.DeleteAsync(user.UserId);
         }
 
         [Fact]
